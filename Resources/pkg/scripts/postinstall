@@ -1,0 +1,9 @@
+#!/bin/sh
+# Start MCTweaks for the logged-in user right after install, so the Welcome window guides the next steps.
+# $2 is the install location (/Applications). The installer runs this as root.
+user=$(stat -f%Su /dev/console)
+if [ -n "$user" ] && [ "$user" != "root" ] && [ "$user" != "loginwindow" ]; then
+    uid=$(id -u "$user")
+    launchctl asuser "$uid" sudo -u "$user" open "$2/MCTweaks.app"
+fi
+exit 0

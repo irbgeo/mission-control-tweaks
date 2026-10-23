@@ -8,7 +8,7 @@ import Testing
 }
 
 @Test func runningWithWindows() {
-    let w = MCWindow(wid: 7, title: "Chat", bundleID: "t", frame: .zero)
+    let w = MCWindow(wid: 7, title: "Chat", frame: .zero)
     let input = DockMenuInput(isRunning: true, windows: [w])
     #expect(dockMenu(input) == [.window(wid: 7, title: "Chat"), .separator, .hide, .quit])
 }

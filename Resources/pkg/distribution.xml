@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Installer window: title "MCTweaks" (Installer adds "Install"), our welcome text, installs only to this Mac. -->
+<installer-gui-script minSpecVersion="2">
+    <title>MCTweaks</title>
+    <welcome file="welcome.html" mime-type="text/html"/>
+    <options customize="never" require-scripts="false" hostArchitectures="arm64"/>
+    <domains enable_anywhere="false" enable_currentUserHome="false" enable_localSystem="true"/>
+    <choices-outline>
+        <line choice="default">
+            <line choice="dev.geo.mctweaks.pkg"/>
+        </line>
+    </choices-outline>
+    <choice id="default"/>
+    <choice id="dev.geo.mctweaks.pkg" visible="false">
+        <pkg-ref id="dev.geo.mctweaks.pkg"/>
+    </choice>
+    <pkg-ref id="dev.geo.mctweaks.pkg" onConclusion="none">MCTweaks-component.pkg</pkg-ref>
+</installer-gui-script>

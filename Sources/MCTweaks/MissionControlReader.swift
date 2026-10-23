@@ -68,12 +68,10 @@ private func mcWindow(_ button: AXUIElement) -> MCWindow? {
         return nil
     }
 
-    let identifier = axString(button, kAXIdentifierAttribute) ?? ""
-    let bundle = bundleID(fromMCIdentifier: identifier)
+    let title = axString(button, kAXTitleAttribute) ?? ""
     let window = MCWindow(
         wid: wid,
-        title: axString(button, kAXTitleAttribute) ?? "",
-        bundleID: bundle,
+        title: title,
         frame: frame
     )
     return window
@@ -85,8 +83,9 @@ private func dockItem(_ element: AXUIElement) -> DockItem? {
     }
 
     let url = axAttr(element, kAXURLAttribute) as? URL
+    let title = axString(element, kAXTitleAttribute) ?? ""
     let item = DockItem(
-        title: axString(element, kAXTitleAttribute) ?? "",
+        title: title,
         frame: frame,
         url: url
     )

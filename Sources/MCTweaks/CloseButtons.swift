@@ -17,7 +17,14 @@ final class CloseButtons {
         for window in windows {
             let axRect = closeButtonRect(for: window.frame)
             let frame = cocoaRect(axRect, primaryHeight: primaryHeight)
-            let panel = panels[window.wid] ?? makePanel(wid: window.wid)
+            // Touch WindowServer only for new or moved buttons, not every tick.
+            if let panel = panels[window.wid] {
+                if panel.frame != frame {
+                    panel.setFrame(frame, display: false)
+                }
+                continue
+            }
+            let panel = makePanel(wid: window.wid)
             panels[window.wid] = panel
             panel.setFrame(frame, display: false)
             panel.orderFrontRegardless()

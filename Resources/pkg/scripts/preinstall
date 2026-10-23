@@ -1,0 +1,5 @@
+#!/bin/sh
+# Quit the logged-in user's running MCTweaks so the installer can replace it (not other users' sessions).
+user=$(stat -f%Su /dev/console)
+pkill -x -u "$user" MCTweaks
+exit 0

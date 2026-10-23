@@ -24,3 +24,21 @@ public func closeButtonRect(for window: CGRect) -> CGRect {
     )
     return rect
 }
+
+private let menuMargin: CGFloat = 4
+private let menuGap: CGFloat = 12
+
+/// menuOrigin puts the menu just above the click, centred on it, and keeps it on the screen (Cocoa coordinates).
+public func menuOrigin(_ input: MenuPlacementInput) -> CGPoint {
+    let minX = input.screen.minX + menuMargin
+    let maxX = input.screen.maxX - input.size.width - menuMargin
+    let minY = input.screen.minY + menuMargin
+    let maxY = input.screen.maxY - input.size.height - menuMargin
+    let x = input.click.x - input.size.width / 2
+    let y = input.click.y + menuGap
+    let origin = CGPoint(
+        x: min(max(x, minX), maxX),
+        y: min(max(y, minY), maxY)
+    )
+    return origin
+}

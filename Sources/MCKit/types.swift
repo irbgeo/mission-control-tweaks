@@ -5,18 +5,15 @@ import Foundation
 public struct MCWindow: Equatable, Sendable {
     public let wid: Int
     public let title: String
-    public let bundleID: String
     public let frame: CGRect
 
     public init(
         wid: Int,
         title: String,
-        bundleID: String,
         frame: CGRect
     ) {
         self.wid = wid
         self.title = title
-        self.bundleID = bundleID
         self.frame = frame
     }
 }
@@ -56,5 +53,40 @@ public struct DockMenuInput: Sendable {
     ) {
         self.isRunning = isRunning
         self.windows = windows
+    }
+}
+
+public enum AppStatus: Equatable, Sendable {
+    case working
+    case needsPermission
+}
+
+public struct WelcomeInput: Sendable {
+    public let status: AppStatus
+    public let didShowWelcome: Bool
+
+    public init(
+        status: AppStatus,
+        didShowWelcome: Bool
+    ) {
+        self.status = status
+        self.didShowWelcome = didShowWelcome
+    }
+}
+
+/// MenuPlacementInput uses Cocoa coordinates (bottom-left origin).
+public struct MenuPlacementInput: Sendable {
+    public let click: CGPoint
+    public let size: CGSize
+    public let screen: CGRect
+
+    public init(
+        click: CGPoint,
+        size: CGSize,
+        screen: CGRect
+    ) {
+        self.click = click
+        self.size = size
+        self.screen = screen
     }
 }

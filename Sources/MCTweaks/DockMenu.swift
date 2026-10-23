@@ -1,12 +1,15 @@
 import AppKit
 import MCKit
 
-/// DockMenu catches right-clicks on Dock icons while Mission Control is open and shows an app menu.
+/// DockMenu shows an app menu for a Dock icon right-clicked while Mission Control is open.
 @MainActor
 final class DockMenu {
     private let state: AppState
-    private var tap: CFMachPort?
-    private var swallowNextUp = false
+    private var tap: DockTap?
+    // Clears the click watcher's menu frame however the menu closes (item picked, click outside, Mission Control closed).
+    private lazy var panel = MenuPanel { [weak self] in
+        self?.tap?.snapshot.withLock { $0.menuFrame = nil }
+    }
 
     init(
         state: AppState
@@ -14,87 +17,91 @@ final class DockMenu {
         self.state = state
     }
 
-    /// start creates the event tap once; call it again until it succeeds (it needs Accessibility permission).
+    /// start creates the click watcher once; call it again until it succeeds (it needs Accessibility permission).
     func start() {
         guard tap == nil, AXIsProcessTrusted() else {
             return
         }
 
-        let mask = (1 << CGEventType.rightMouseDown.rawValue) | (1 << CGEventType.rightMouseUp.rawValue)
-        let selfPointer = Unmanaged.passUnretained(self).toOpaque()
-        tap = CGEvent.tapCreate(
-            tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
-            options: .defaultTap,
-            eventsOfInterest: CGEventMask(mask),
-            callback: dockMenuTapCallback,
-            userInfo: selfPointer
+        let tap = DockTap(
+            onRightClick: { [weak self] url, location in
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated {
+                        self?.show(url: url, at: location)
+                    }
+                }
+            },
+            onClickOutsideMenu: { [weak self] in
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated {
+                        self?.close()
+                    }
+                }
+            }
         )
-        guard let tap else {
-            NSLog("MCTweaks: cannot create event tap (Accessibility permission?)")
+        let started = tap.start()
+        guard started else {
+            NSLog("MCTweaks: cannot create event tap yet")
             return
         }
-
-        let source = CFMachPortCreateRunLoopSource(nil, tap, 0)
-        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
-        CGEvent.tapEnable(tap: tap, enable: true)
+        self.tap = tap
     }
 
-    /// handle returns false when the event must be swallowed.
-    func handle(type: CGEventType, location: CGPoint) -> Bool {
-        switch type {
-        case .tapDisabledByTimeout, .tapDisabledByUserInput:
-            if let tap {
-                CGEvent.tapEnable(tap: tap, enable: true)
-            }
-            return true
-        case .rightMouseUp:
-            let pass = !swallowNextUp
-            swallowNextUp = false
-            return pass
-        case .rightMouseDown:
-            return handleRightDown(location)
-        default:
-            return true
+    /// sync passes the latest Mission Control state to the click watcher and closes the menu when Mission Control closes.
+    func sync() {
+        let open = state.windows != nil
+        let items = state.dockItems
+        tap?.snapshot.withLock { snapshot in
+            snapshot.missionControlOpen = open
+            snapshot.dockItems = items
+        }
+        if !open && panel.frame != nil {
+            close()
         }
     }
 
-    private func handleRightDown(_ location: CGPoint) -> Bool {
-        guard state.windows != nil, let item = dockItem(at: location, in: state.dockItems), let url = item.url else {
-            return true
-        }
-
-        swallowNextUp = true
-        // Show the menu after the tap callback returns; popUp runs its own tracking loop.
-        DispatchQueue.main.async {
-            self.showMenu(url: url, at: location)
-        }
-        return false
-    }
-
-    private func showMenu(url: URL, at location: CGPoint) {
+    private func show(url: URL, at location: CGPoint) {
         let app = runningApp(url: url)
-        let windows = (state.windows ?? []).filter { $0.bundleID == app?.bundleIdentifier }
+        let windows = windowsOf(app)
         let input = DockMenuInput(
             isRunning: app != nil,
             windows: windows
         )
         let entries = dockMenu(input)
-
-        let menu = NSMenu()
-        for entry in entries {
+        let rows = entries.map { entry in
             let target = MenuTarget(
                 entry: entry,
                 app: app,
                 url: url
             )
-            let item = target.menuItem()
-            menu.addItem(item)
+            return target.row()
         }
 
         let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
-        let point = NSPoint(x: location.x, y: primaryHeight - location.y)
-        menu.popUp(positioning: nil, at: point, in: nil)
+        let click = NSPoint(
+            x: location.x,
+            y: primaryHeight - location.y
+        )
+        panel.show(rows, at: click)
+        let frame = panel.frame.map { cocoaRect($0, primaryHeight: primaryHeight) }
+        tap?.snapshot.withLock { $0.menuFrame = frame }
+    }
+
+    private func close() {
+        panel.close()
+    }
+
+    /// windowsOf matches by the window's owner process: Mission Control's bundle id is not always the app's.
+    private func windowsOf(_ app: NSRunningApplication?) -> [MCWindow] {
+        guard let app else {
+            return []
+        }
+        let all = state.windows ?? []
+        let windows = all.filter { window in
+            let owner = ownerApp(ofWindow: window.wid)
+            return owner?.processIdentifier == app.processIdentifier
+        }
+        return windows
     }
 
     private func runningApp(url: URL) -> NSRunningApplication? {
@@ -105,42 +112,18 @@ final class DockMenu {
     }
 }
 
-private let dockMenuTapCallback: CGEventTapCallBack = { _, type, event, userInfo in
-    guard let userInfo else {
-        return Unmanaged.passUnretained(event)
-    }
-
-    let menu = Unmanaged<DockMenu>.fromOpaque(userInfo).takeUnretainedValue()
-    let location = event.location
-    // The tap's run loop source is on the main run loop.
-    let pass = MainActor.assumeIsolated {
-        menu.handle(type: type, location: location)
-    }
-    return pass ? Unmanaged.passUnretained(event) : nil
-}
-
-/// MenuTarget runs one menu entry; NSMenuItem keeps it alive as representedObject.
+/// MenuTarget turns one menu entry into a row and runs it.
 @MainActor
-private final class MenuTarget: NSObject {
-    private let entry: MenuEntry
-    private let app: NSRunningApplication?
-    private let url: URL
+private struct MenuTarget {
+    let entry: MenuEntry
+    let app: NSRunningApplication?
+    let url: URL
 
-    init(
-        entry: MenuEntry,
-        app: NSRunningApplication?,
-        url: URL
-    ) {
-        self.entry = entry
-        self.app = app
-        self.url = url
-    }
-
-    func menuItem() -> NSMenuItem {
-        let title: String
+    func row() -> MenuRow {
+        let title: String?
         switch entry {
         case .separator:
-            return NSMenuItem.separator()
+            title = nil
         case let .window(_, windowTitle):
             title = windowTitle.isEmpty ? "(untitled)" : windowTitle
         case .hide:
@@ -151,13 +134,13 @@ private final class MenuTarget: NSObject {
             title = "Open"
         }
 
-        let item = NSMenuItem(title: title, action: #selector(run), keyEquivalent: "")
-        item.target = self
-        item.representedObject = self
-        return item
+        let row = MenuRow(title: title) {
+            run()
+        }
+        return row
     }
 
-    @objc private func run() {
+    private func run() {
         let optionHeld = NSEvent.modifierFlags.contains(.option)
         switch entry {
         case let .window(wid, _):
