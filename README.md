@@ -11,6 +11,16 @@ MCTweaks adds two things to **Mission Control** on macOS:
 
 **Requirements:** a Mac with Apple Silicon (M1 or newer) and **macOS 27**. Older macOS versions are not tested: they draw Mission Control differently, and MCTweaks may start but do nothing there.
 
+### What MCTweaks accesses
+
+- **Accessibility** (on macOS 27: **Device Control and Data Access**) is the only permission it asks for. It uses it to:
+  - read the windows in Mission Control and the icons in the Dock (positions, titles, app names), to know where to draw the × buttons;
+  - press a window's own close button when you click ×;
+  - see mouse clicks (no keyboard). It acts only on a right-click on a Dock icon while Mission Control is open, and on a click outside its own menu (to close it). All other clicks pass through unchanged.
+- **No network.** **Check for Updates…** only opens the Releases page in your browser.
+- **Stored data:** two flags in its settings ("Welcome window shown", "Open at Login set up"). **Open at Login** itself is kept by macOS.
+- **System changes:** the **Open System Settings** button in the Welcome window runs `tccutil reset Accessibility dev.geo.mctweaks`, which removes only MCTweaks' own old permission entry.
+
 ---
 
 ## Install
