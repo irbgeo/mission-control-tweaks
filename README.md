@@ -126,8 +126,6 @@ make icon                  # Resources/AppIcon.svg → Resources/AppIcon.icns
 make dmg-background        # redraw Resources/dmg/background*.png
 ```
 
-**CI:** every push to `main` and every pull request runs the tests and builds the DMG (download it from the run's artifacts).
-
 **Release:** push a tag, for example `git tag v0.1.0 && git push origin v0.1.0`. GitHub Actions runs the tests, builds the DMG and publishes the release. The signing key is used only to sign the app and is removed before any third-party build tool runs; `dmgbuild` and its dependencies are installed from `Resources/dmg/requirements.txt` with pinned hashes.
 
 **Signing:** without secrets, builds are ad-hoc signed, and users must allow Accessibility again after every update. To keep the permission across updates, create a free self-signed certificate once and add it to the repo secrets:

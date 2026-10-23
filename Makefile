@@ -45,6 +45,19 @@ $(VENV)/.installed: Resources/dmg/requirements.txt
 	$(VENV)/bin/python -m pip install --quiet --require-hashes --only-binary :all: -r Resources/dmg/requirements.txt
 	touch $@
 
+# Installs into /Applications and starts the app (postinstall). Not relocatable: always /Applications.
+pkg: build
+	rm -rf build/pkgroot "$(PKG)"
+	mkdir -p build/pkgroot
+	cp -R $(BUILD_APP) build/pkgroot/
+	pkgbuild --analyze --root build/pkgroot build/component.plist
+	plutil -replace 0.BundleIsRelocatable -bool NO build/component.plist
+	pkgbuild --root build/pkgroot --component-plist build/component.plist \
+		--install-location /Applications --scripts Resources/pkg/scripts \
+		--identifier $(LABEL).pkg --version "$(VERSION)" build/MCTweaks-component.pkg
+	productbuild --distribution Resources/pkg/distribution.xml --resources Resources/pkg/resources \
+		--package-path build "$(PKG)"
+
 dmg: pkg dmg-image
 
 # Only the disk image from an existing pkg: CI runs it after the signing keychain is gone.
